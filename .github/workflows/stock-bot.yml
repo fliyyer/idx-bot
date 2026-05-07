@@ -1,0 +1,30 @@
+name: Stock Bot
+
+on:
+  schedule:
+    # 10:00 WIB (Asia/Jakarta) = 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-stock-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run stock bot
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GOAPI_KEY: ${{ secrets.GOAPI_KEY }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+        run: python main.py

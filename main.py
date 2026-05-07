@@ -25,11 +25,11 @@ from ta.trend import MACD
 # CONFIG
 # ============================================
 
-GOAPI_KEY = "030782f4-3da8-5756-ce8d-5ad344c2"
+GOAPI_KEY = os.getenv("GOAPI_KEY")
 
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 
-BASE_URL = "https://api.goapi.io"
+BASE_URL = os.getenv("BASE_URL", "https://api.goapi.io")
 
 
 # ============================================
