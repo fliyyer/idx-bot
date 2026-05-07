@@ -160,6 +160,11 @@ def analyze_stock(symbol):
             progress=False
         )
 
+        # yfinance can return MultiIndex columns depending on version/config.
+        # Flatten to a single level so each field lookup returns scalar values.
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
         if len(df) < 30:
             return None
 
@@ -188,12 +193,6 @@ def analyze_stock(symbol):
         df['macd_signal'] = macd.macd_signal()
 
         # ============================================
-        # LATEST DATA
-        # ============================================
-
-        latest = df.iloc[-1]
-
-                # ============================================
         # INDICATORS
         # ============================================
 
