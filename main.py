@@ -490,7 +490,7 @@ for stock in stocks:
 # SORT BEST STOCKS
 # ============================================
 
-top_stocks = sorted(
+ranked_stocks = sorted(
     all_results,
     key=lambda x: (
         x['score'],
@@ -501,7 +501,7 @@ top_stocks = sorted(
 )
 
 top_stocks = [
-    s for s in top_stocks
+    s for s in ranked_stocks
     if s['signal'] in ["BUY", "STRONG BUY"]
 ][:5]
 
@@ -523,7 +523,7 @@ for stock in top_stocks:
 # SEND DISCORD
 # ============================================
 
-def send_discord(top_stocks):
+def send_discord(top_stocks, ranked_stocks):
 
     now = datetime.now(
     ZoneInfo("Asia/Jakarta")
@@ -535,8 +535,19 @@ def send_discord(top_stocks):
 🎯 Fokus: momentum cepat, volume, breakout
 🛡️ Mode: low-risk filter aktif
 """
-    # LIMIT 5 STOCKS
-    for idx, stock in enumerate(top_stocks[:5], start=1):
+    stocks_to_send = top_stocks[:5]
+    warning = ""
+
+    using_fallback = False
+    if len(stocks_to_send) == 0:
+        using_fallback = True
+        warning = "\n⚠️ Tidak ada kandidat BUY yang lolos filter. Mode defensif aktif."
+        stocks_to_send = ranked_stocks[:3]
+
+    message += warning
+
+    # LIMIT 5 STOCKS (fallback 3 HOLD/SELL terbaik jika BUY kosong)
+    for idx, stock in enumerate(stocks_to_send, start=1):
 
         emoji = "🟢"
 
@@ -547,8 +558,12 @@ def send_discord(top_stocks):
             emoji = "🔴"
 
         reason_text = ", ".join(stock['reasons'][:4])
+        signal_label = stock['signal']
+        if using_fallback:
+            signal_label = f"WATCHLIST-{stock['signal']}"
+
         message += f"""
-{emoji} #{idx} {stock['symbol']} ({stock['signal']})
+{emoji} #{idx} {stock['symbol']} ({signal_label})
 
 💰 Last Price : {float(stock['price'])}
 📈 Change 1D : {float(stock['daily_change_pct'])}%
@@ -585,4 +600,4 @@ def send_discord(top_stocks):
 
 print("\nSEND TO DISCORD...\n")
 
-send_discord(top_stocks)
+send_discord(top_stocks, ranked_stocks)
