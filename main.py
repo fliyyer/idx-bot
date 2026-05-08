@@ -12,13 +12,12 @@ import os
 import requests
 import pandas as pd
 import yfinance as yf
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from ta.momentum import RSIIndicator
 from ta.trend import MACD
+from ta.volatility import AverageTrueRange
 
 
 # ============================================
@@ -205,7 +204,7 @@ def analyze_stock(symbol):
         prev = df.iloc[-2].copy()
 
         score = 0
-        max_score = 12
+        max_score = 14
 
         reasons = []
         daily_change_pct = (
@@ -220,6 +219,19 @@ def analyze_stock(symbol):
             (float(latest['High']) - float(latest['Close']))
             / float(latest['Close'])
         ) * 100
+
+        # ============================================
+        # ATR FOR RISK CONTROL
+        # ============================================
+
+        atr_indicator = AverageTrueRange(
+            high=df['High'],
+            low=df['Low'],
+            close=df['Close'],
+            window=14
+        )
+        df['atr'] = atr_indicator.average_true_range()
+        atr_pct = (float(latest['atr']) / float(latest['Close'])) * 100
 
         # ============================================
         # 1. RSI MOMENTUM HEALTHY (scalping ideal)
@@ -294,9 +306,9 @@ def analyze_stock(symbol):
         # 9. BREAKOUT HIGH 10 HARI (lebih agresif untuk scalping)
         # ============================================
 
-        highest_10 = df['High'].tail(10).max()
+        prev_highest_10 = df['High'].iloc[-11:-1].max()
 
-        if float(latest['Close']) >= float(highest_10):
+        if float(latest['Close']) > float(prev_highest_10):
             score += 1
             reasons.append("Breakout high 10 hari")
 
@@ -325,16 +337,32 @@ def analyze_stock(symbol):
             reasons.append(f"Range harian menarik ({high_low_range_pct:.2f}%)")
 
         # ============================================
+        # 13. VOLATILITY TERKONTROL (LOW RISK)
+        # ============================================
+
+        if atr_pct <= 3.2:
+            score += 1
+            reasons.append(f"ATR terkendali ({atr_pct:.2f}%)")
+
+        # ============================================
+        # 14. TIDAK TERLALU OVEREXTENDED
+        # ============================================
+
+        if daily_change_pct <= 3.5 and float(latest['rsi']) < 72:
+            score += 1
+            reasons.append("Belum overextended")
+
+        # ============================================
         # SIGNAL
         # ============================================
 
-        if score >= 10:
+        if score >= 12:
             signal = "STRONG BUY"
 
-        elif score >= 8:
+        elif score >= 10:
             signal = "BUY"
 
-        elif score >= 6:
+        elif score >= 8:
             signal = "HOLD"
 
         else:
@@ -359,6 +387,19 @@ def analyze_stock(symbol):
             /
             (buy_price - cut_loss)
         )
+
+        # ============================================
+        # HARD RISK FILTER
+        # ============================================
+
+        if (
+            float(latest['rsi']) >= 75
+            or daily_change_pct > 5.0
+            or atr_pct > 4.5
+            or volume_ratio < 1.1
+            or rr_ratio < 1.3
+        ):
+            return None
 
         # ============================================
         # RESULT
@@ -395,6 +436,8 @@ def analyze_stock(symbol):
             "daily_change_pct": round(daily_change_pct, 2),
 
             "volume_ratio": round(volume_ratio, 2),
+
+            "atr_pct": round(atr_pct, 2),
 
             "reasons": reasons
         }
@@ -456,7 +499,12 @@ top_stocks = sorted(
         x['rsi']
     ),
     reverse=True
-)[:5]
+)
+
+top_stocks = [
+    s for s in top_stocks
+    if s['signal'] in ["BUY", "STRONG BUY"]
+][:5]
 
 
 # ============================================
@@ -486,6 +534,7 @@ def send_discord(top_stocks):
 📊 TOP 5 SAHAM SCALPING (HARIAN)
 🕒 {now}
 🎯 Fokus: momentum cepat, volume, breakout
+🛡️ Mode: low-risk filter aktif
 """
     # LIMIT 5 STOCKS
     for idx, stock in enumerate(top_stocks[:5], start=1):
@@ -505,10 +554,12 @@ def send_discord(top_stocks):
 💰 Last Price : {float(stock['price'])}
 📈 Change 1D : {float(stock['daily_change_pct'])}%
 🔊 Volume : {float(stock['volume_ratio'])}x rata-rata 20H
+⚡ ATR : {float(stock['atr_pct'])}%
 
 🎯 Buy Area : {float(stock['buy_area_low'])} - {float(stock['buy_area_high'])}
 ✅ Take Profit : {float(stock['take_profit'])}
 🛑 Cut Loss : {float(stock['cut_loss'])}
+⚖️ R/R : {float(stock['rr_ratio'])}
 
 📊 RSI : {float(stock['rsi'])}
 ⭐ Score : {int(stock['score'])}/{int(stock['max_score'])}
