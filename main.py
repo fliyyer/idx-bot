@@ -199,6 +199,17 @@ def analyze_stock(symbol):
 
         df['ema50'] = df['Close'].ewm(span=50).mean()
 
+        # ============================================
+        # ATR FOR RISK CONTROL
+        # ============================================
+        atr_indicator = AverageTrueRange(
+            high=df['High'],
+            low=df['Low'],
+            close=df['Close'],
+            window=14
+        )
+        df['atr'] = atr_indicator.average_true_range()
+
         latest = df.iloc[-1].copy()
 
         prev = df.iloc[-2].copy()
@@ -219,18 +230,6 @@ def analyze_stock(symbol):
             (float(latest['High']) - float(latest['Close']))
             / float(latest['Close'])
         ) * 100
-
-        # ============================================
-        # ATR FOR RISK CONTROL
-        # ============================================
-
-        atr_indicator = AverageTrueRange(
-            high=df['High'],
-            low=df['Low'],
-            close=df['Close'],
-            window=14
-        )
-        df['atr'] = atr_indicator.average_true_range()
         atr_pct = (float(latest['atr']) / float(latest['Close'])) * 100
 
         # ============================================
