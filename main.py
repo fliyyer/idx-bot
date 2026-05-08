@@ -542,11 +542,11 @@ def send_discord(top_stocks, ranked_stocks):
     if len(stocks_to_send) == 0:
         using_fallback = True
         warning = "\n⚠️ Tidak ada kandidat BUY yang lolos filter. Mode defensif aktif."
-        stocks_to_send = ranked_stocks[:3]
+        stocks_to_send = ranked_stocks[:5]
 
     message += warning
 
-    # LIMIT 5 STOCKS (fallback 3 HOLD/SELL terbaik jika BUY kosong)
+    # LIMIT 5 STOCKS (fallback 5 HOLD/SELL terbaik jika BUY kosong)
     for idx, stock in enumerate(stocks_to_send, start=1):
 
         emoji = "🟢"
