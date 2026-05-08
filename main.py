@@ -205,17 +205,29 @@ def analyze_stock(symbol):
         prev = df.iloc[-2].copy()
 
         score = 0
-        max_score = 10
+        max_score = 12
 
         reasons = []
+        daily_change_pct = (
+            (float(latest['Close']) - float(prev['Close']))
+            / float(prev['Close'])
+        ) * 100
+        high_low_range_pct = (
+            (float(latest['High']) - float(latest['Low']))
+            / float(latest['Close'])
+        ) * 100
+        close_to_high_pct = (
+            (float(latest['High']) - float(latest['Close']))
+            / float(latest['Close'])
+        ) * 100
 
         # ============================================
-        # 1. RSI HEALTHY
+        # 1. RSI MOMENTUM HEALTHY (scalping ideal)
         # ============================================
 
-        if 40 <= float(latest['rsi']) <= 65:
+        if 50 <= float(latest['rsi']) <= 68:
             score += 1
-            reasons.append("RSI sehat")
+            reasons.append("RSI momentum sehat (50-68)")
 
         # ============================================
         # 2. RSI UP
@@ -234,20 +246,22 @@ def analyze_stock(symbol):
             reasons.append("MACD bullish crossover")
 
         # ============================================
-        # 4. MACD POSITIVE
+        # 4. MACD HISTOGRAM MENGUAT
         # ============================================
 
-        if float(latest['macd']) > 0:
+        latest_hist = float(latest['macd']) - float(latest['macd_signal'])
+        prev_hist = float(prev['macd']) - float(prev['macd_signal'])
+        if latest_hist > prev_hist:
             score += 1
-            reasons.append("MACD positif")
+            reasons.append("Histogram MACD menguat")
 
         # ============================================
-        # 5. PRICE UP
+        # 5. MOMENTUM HARIAN POSITIF
         # ============================================
 
-        if float(latest['Close']) > float(prev['Close']):
+        if daily_change_pct >= 0.8:
             score += 1
-            reasons.append("Momentum harga naik")
+            reasons.append(f"Momentum harian kuat ({daily_change_pct:.2f}%)")
 
         # ============================================
         # 6. EMA20 > EMA50
@@ -266,24 +280,25 @@ def analyze_stock(symbol):
             reasons.append("Close di atas EMA20")
 
         # ============================================
-        # 8. VOLUME ABOVE AVG
+        # 8. VOLUME SURGE VS RATA-RATA 20 HARI
         # ============================================
 
-        avg_volume = df['Volume'].mean()
+        avg_volume = df['Volume'].tail(20).mean()
+        volume_ratio = float(latest['Volume']) / float(avg_volume) if float(avg_volume) > 0 else 0
 
-        if float(latest['Volume']) > float(avg_volume):
+        if volume_ratio >= 1.3:
             score += 1
-            reasons.append("Volume di atas rata-rata")
+            reasons.append(f"Volume surge {volume_ratio:.2f}x")
 
         # ============================================
-        # 9. BREAKOUT 20 DAY HIGH
+        # 9. BREAKOUT HIGH 10 HARI (lebih agresif untuk scalping)
         # ============================================
 
-        highest_20 = df['High'].tail(20).max()
+        highest_10 = df['High'].tail(10).max()
 
-        if float(latest['Close']) >= float(highest_20):
+        if float(latest['Close']) >= float(highest_10):
             score += 1
-            reasons.append("Breakout high 20 hari")
+            reasons.append("Breakout high 10 hari")
 
         # ============================================
         # 10. GREEN CANDLE
@@ -294,16 +309,32 @@ def analyze_stock(symbol):
             reasons.append("Bullish candle")
 
         # ============================================
+        # 11. CLOSE DEKAT HIGH (tekanan beli masih kuat)
+        # ============================================
+
+        if close_to_high_pct <= 1.0:
+            score += 1
+            reasons.append("Close dekat high harian")
+
+        # ============================================
+        # 12. RANGE CUKUP UNTUK SCALPING
+        # ============================================
+
+        if high_low_range_pct >= 1.5:
+            score += 1
+            reasons.append(f"Range harian menarik ({high_low_range_pct:.2f}%)")
+
+        # ============================================
         # SIGNAL
         # ============================================
 
-        if score >= 8:
+        if score >= 10:
             signal = "STRONG BUY"
 
-        elif score >= 6:
+        elif score >= 8:
             signal = "BUY"
 
-        elif score >= 4:
+        elif score >= 6:
             signal = "HOLD"
 
         else:
@@ -315,11 +346,13 @@ def analyze_stock(symbol):
 
         current_price = float(latest['Close'])
 
-        buy_price = current_price
+        buy_area_low = min(float(latest['ema20']), current_price * 0.995)
+        buy_area_high = current_price * 1.003
+        buy_price = (buy_area_low + buy_area_high) / 2
 
-        take_profit = buy_price * 1.05
+        take_profit = current_price * 1.025
 
-        cut_loss = buy_price * 0.97
+        cut_loss = buy_area_low * 0.985
 
         rr_ratio = (
             (take_profit - buy_price)
@@ -343,6 +376,10 @@ def analyze_stock(symbol):
 
             "signal": signal,
 
+            "buy_area_low": round(buy_area_low, 2),
+
+            "buy_area_high": round(buy_area_high, 2),
+
             "buy_price": round(buy_price, 2),
 
             "take_profit": round(take_profit, 2),
@@ -354,6 +391,10 @@ def analyze_stock(symbol):
             "score": score,
 
             "max_score": max_score,
+
+            "daily_change_pct": round(daily_change_pct, 2),
+
+            "volume_ratio": round(volume_ratio, 2),
 
             "reasons": reasons
         }
@@ -411,10 +452,11 @@ top_stocks = sorted(
     all_results,
     key=lambda x: (
         x['score'],
+        x['daily_change_pct'],
         x['rsi']
     ),
     reverse=True
-)[:10]
+)[:5]
 
 
 # ============================================
@@ -422,7 +464,7 @@ top_stocks = sorted(
 # ============================================
 
 print("\n===================================")
-print("TOP 10 STOCKS")
+print("TOP 5 STOCKS (SCALPING HARIAN)")
 print("===================================")
 
 for stock in top_stocks:
@@ -441,11 +483,12 @@ def send_discord(top_stocks):
 ).strftime("%Y-%m-%d %H:%M:%S WIB")
 
     message = f"""
-📊 TOP 10 STOCK PICKS
+📊 TOP 5 SAHAM SCALPING (HARIAN)
 🕒 {now}
+🎯 Fokus: momentum cepat, volume, breakout
 """
-    # LIMIT 10 STOCKS
-    for idx, stock in enumerate(top_stocks[:10], start=1):
+    # LIMIT 5 STOCKS
+    for idx, stock in enumerate(top_stocks[:5], start=1):
 
         emoji = "🟢"
 
@@ -455,17 +498,21 @@ def send_discord(top_stocks):
         elif stock['signal'] == "SELL":
             emoji = "🔴"
 
+        reason_text = ", ".join(stock['reasons'][:4])
         message += f"""
 {emoji} #{idx} {stock['symbol']} ({stock['signal']})
 
-💰 Price : {float(stock['price'])}
+💰 Last Price : {float(stock['price'])}
+📈 Change 1D : {float(stock['daily_change_pct'])}%
+🔊 Volume : {float(stock['volume_ratio'])}x rata-rata 20H
 
-🎯 Buy Area : {float(stock['buy_price'])}
+🎯 Buy Area : {float(stock['buy_area_low'])} - {float(stock['buy_area_high'])}
 ✅ Take Profit : {float(stock['take_profit'])}
 🛑 Cut Loss : {float(stock['cut_loss'])}
 
 📊 RSI : {float(stock['rsi'])}
 ⭐ Score : {int(stock['score'])}/{int(stock['max_score'])}
+🧠 Alasan : {reason_text}
 ━━━━━━━━━━━━━━━━━━
 """
 
