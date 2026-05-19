@@ -511,56 +511,48 @@ top_stocks = [
 # ============================================
 
 print("\n===================================")
-print("TOP 5 STOCKS (SCALPING HARIAN)")
+print(f"TOP {len(top_stocks)} STOCKS (SCALPING HARIAN)")
 print("===================================")
 
-for stock in top_stocks:
-
-    print(stock)
+if len(top_stocks) == 0:
+    print("Tidak ada sinyal BUY/STRONG BUY hari ini.")
+else:
+    for stock in top_stocks:
+        print(stock)
 
 
 # ============================================
 # SEND DISCORD
 # ============================================
 
-def send_discord(top_stocks, ranked_stocks):
+def send_discord(top_stocks):
 
     now = datetime.now(
     ZoneInfo("Asia/Jakarta")
 ).strftime("%Y-%m-%d %H:%M:%S WIB")
 
+    stocks_to_send = top_stocks[:5]
+    warning = ""
+    header_label = "SAHAM SCALPING (HARIAN)"
+    if len(stocks_to_send) == 0:
+        warning = "\n⚠️ Tidak ada kandidat BUY yang lolos filter hari ini."
+
     message = f"""
-📊 TOP 5 SAHAM SCALPING (HARIAN)
+📊 TOP {len(stocks_to_send)} {header_label}
 🕒 {now}
 🎯 Fokus: momentum cepat, volume, breakout
 🛡️ Mode: low-risk filter aktif
 """
-    stocks_to_send = top_stocks[:5]
-    warning = ""
-
-    using_fallback = False
-    if len(stocks_to_send) == 0:
-        using_fallback = True
-        warning = "\n⚠️ Tidak ada kandidat BUY yang lolos filter. Mode defensif aktif."
-        stocks_to_send = ranked_stocks[:5]
 
     message += warning
 
-    # LIMIT 5 STOCKS (fallback 5 HOLD/SELL terbaik jika BUY kosong)
+    # LIMIT 5 STOCKS (BUY/STRONG BUY only)
     for idx, stock in enumerate(stocks_to_send, start=1):
 
         emoji = "🟢"
 
-        if stock['signal'] == "HOLD":
-            emoji = "🟡"
-
-        elif stock['signal'] == "SELL":
-            emoji = "🔴"
-
         reason_text = ", ".join(stock['reasons'][:4])
         signal_label = stock['signal']
-        if using_fallback:
-            signal_label = f"WATCHLIST-{stock['signal']}"
 
         message += f"""
 {emoji} #{idx} {stock['symbol']} ({signal_label})
@@ -600,4 +592,4 @@ def send_discord(top_stocks, ranked_stocks):
 
 print("\nSEND TO DISCORD...\n")
 
-send_discord(top_stocks, ranked_stocks)
+send_discord(top_stocks)
